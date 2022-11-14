@@ -1,0 +1,25 @@
+#Usine program 'Dsuite' to calculate D statistics, F4-ratio, and f-branch statistics from the VCF file using the phylogeny newick file (-t) as input
+#Also requires a 'SETS' file to tell the program which 'group' each individual in the VCF file belongs to. 
+#As we wanted to measure introgression between the lineages in the phylogeny, we assign each individual to their lineage in a file that looks like:
+
+15460   NM1
+17825   NWB
+17896   NM1
+20917   NAL
+21332   BRG
+21350   BRG
+etc
+
+#Run Dtrios first using the tree to output D stats and F4 stats of all combinations of the lineages
+
+./Dsuite/Build/Dsuite Dtrios -n Name_of_run -t treefile.nwk \
+../VCF_files/Name.vcf.gz ./Phylogenetics_66_SETS.txt
+
+#Then use the output file ending in '_tree.txt' as well as the newick tree again as input for the Fbranch run:
+
+./Dsuite/Build/Dsuite Fbranch treefile.nwk Phylogenetics_66_SETS.txt
+
+#The Fbranch output goes into the standard out file. I renamed this to Fbranch.txt and copied it and the newick tree into the folder where the python script for plotting is:
+#And then use this to create plot:
+
+dtools.py Fbranch.txt treefile.nwk
