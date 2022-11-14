@@ -1,0 +1,68 @@
+# This file contains the code used for whole genome phylogenomic reconstruction using IQtree.
+
+#First, need to make consensus fasta for each individual. I found the most computationally feasible way to make fully aligned fasta files for all individuals was to do this from the VCF files which have been strictly filtered to remove indels
+
+#Also have to remove all lines that have an '*' otherwise there will be *'s in the fasta which programs dont like
+#Could see lines in the VCF file with a * by using:
+
+grep '*' name.vcf > asterisk_lines.txt
+
+Filter the VCF to remove these lines using:
+
+sed '/'*'/d' name.vcf > new_name.vcf
+
+#Then have to bgzip the new VCF to use with BCFtools
+
+bcftools view Oct2021_70highcoverage_FilterStep2_BCFtools.vcf -O z -o Oct2021_70highcoverage_FilterStep2_BCFtools_BGZip.vcf.gz
+
+#Index the file
+
+module load bcftools
+bcftools index file_BGZip.vcf.gz
+
+
+#For each indivual at a time, use BCFtools to make a fasta file. Only takes a few minutes
+
+#!/bin/bash
+#SBATCH --mem=50G
+#SBATCH -c 1
+#SBATCH -t 0-0:10:0
+#SBATCH --job-name=VCFtoFasta_15460
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=rebecca.taylor@ec.gc.ca
+#SBATCH --output=BCFtools_VCFtoFasta_15460.out
+#SBATCH --error=BCFtools_VCFtoFasta_15460.err
+
+module load bcftools
+bcftools consensus -f ../Reference_genome/Dovetail_hirise_May2021_final_assembly.fasta -I -s 15460 ./new_name.bgzip.vcf.gz > 15460.fa
+
+#Then can split by chromosome (here using a command that makes a new file every time it hits a '>'
+
+mkdir Split_fastas
+cd Split_fastas
+csplit -s -z ../15460.fa '/>/' '{*}'
+
+#This will make a LOT of files - one per scaffold - named xx00 (for scaffold1), xx01 (for scaffold2) etc.
+#Have to rename them so they make sense - just the first 37. Have deleted the rest.
+
+mv ./xx00 ./15460_Scaffold1.fa
+
+#Then need to concatenate each scaffold for all individuals, but need to change the first line of each file so it has the name of the individual first (full script saved separately as large)
+
+#!/bin/bash
+#SBATCH --mem=50G
+#SBATCH -c 1
+#SBATCH -t 0-0:10:0
+#SBATCH --job-name=Fasta_rename
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=rebecca.taylor@ec.gc.ca
+#SBATCH --output=Fasta_rename.out
+#SBATCH --error=Fasta_rename.err
+
+sed -i 's/Scaffold_1__1_contigs__length_105830641/15460/g' 15460_Scaffold1.fa
+sed -i 's/Scaffold_1__1_contigs__length_105830641/17825/g' 17825_Scaffold1.fa
+etc...
+
+#Then can concatenate each scaffold into 1 file:
+
+cat *_Scaffold1.fa > Scaffold1.fasta
