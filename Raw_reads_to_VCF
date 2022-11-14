@@ -1,0 +1,67 @@
+##All code used to filter and map re-sequenced genome raw reads to the reference genome, and produce and filter the VCF files
+
+#Firstly, use Trimmomatic to filter raw read files for each re-sequenced genome
+
+#Trim paired end Fastq sequences using the 'TruSeq3-PE-2.fa' file that comes with the program. Use this same code for all individuals (name = the PCID of each caribou file)
+
+java -jar trimmomatic-0.38.jar PE ./name_R1.fq.gz ./name_R2.fq.gz name_R1_Trimmed.fq.gz name_R1_Unpaired.fq.gz \
+name_R2_Trimmed.fq.gz name_R2_Unpaired.fq.gz ILLUMINACLIP:TruSeq3-PE-2.fa:2:30:10 SLIDINGWINDOW:4:15 MINLEN:36
+
+#Next, align to the reference genome using bowtie2
+#First, index the reference genome
+
+bowtie2-build caribou_reference.fasta caribougenome.fasta
+
+#Then align reads
+
+./bowtie2-2.4.2-linux-x86_64/bowtie2 --local -p 16 -x caribougenome.fasta -q -1 ./name_R1_Trimmed.fq.gz -2 ./name_R2_Trimmed.fq.gz -S nameMapped.sam
+
+#Convert Sam to Bam file
+
+samtools view -bS nameMapped.sam > nameMapped.bam
+
+#Sorting the bam file
+
+samtools sort nameMapped.bam -o name_Sorted.bam -m 4000000000
+
+#Add read group information using GATK4
+
+java -jar ./gatk4/gatk-package-4.2.0.0-local.jar AddOrReplaceReadGroups -I name_Sorted.bam -O name_SortedRG.bam -RGPL illumina -RGPU none -RGSM name
+
+#Remove duplicate reads using GATK4
+
+java -Xmx32g -Djava.io.tmpdir=`pwd`/tmp -jar ./gatk4/gatk-package-4.2.0.0-local.jar MarkDuplicates -I name_SortedRG.bam --REMOVE_DUPLICATES true -O name_NoDupsRG.bam -M marked_dup_metricsname.txt
+
+#Make index file
+
+samtools index name_NoDupsRG.bam
+
+#Make individual VCF files
+
+java -Xmx32g -jar ./gatk-4.2.0.0/gatk-package-4.2.0.0-local.jar HaplotypeCaller -R Dovetail_hirise_May2021_final_assembly.fasta -I name_NoDupsRG.bam -O name.g.vcf.gz -ERC GVCF
+
+#Combine VCF files for multiple individuals into one file - this step was run twice using to combine caribou, and then caribou with the reindeer
+#The command --variant was used to list every individual VCF file
+
+java -Xmx32g -jar ./gatk-4.2.0.0/gatk-package-4.2.0.0-local.jar CombineGVCFs -R caribou_reference.fasta \
+--variant name_NoDupsRG.g.vcf.gz \
+--variant name_NoDupsRG.g.vcf.gz \
+--variant name_NoDupsRG.g.vcf.gz \
+etc \
+-O name_combined.g.vcf.gz
+
+##Perform joint genotyping of the individuals in the VCF file
+
+java -Xmx32g -jar ./gatk-4.2.0.0/gatk-package-4.2.0.0-local.jar GenotypeGVCFs -R caribou_reference.fasta -V name_combined.g.vcf.gz -O name_genotyped.vcf.gz
+
+#Filter VCF files using VCFtools
+#Step 1 - remove indels and calls with low scores (which are changed to missing). Also filter for minimum and max depth - adjusted so max (XX) is double the average depth
+
+vcftools --gzvcf ./name_genotyped.vcf.gz --remove-indels --minGQ 20 --min-meanDP 5 --max-meanDP XX --minQ 20 --recode --recode-INFO-all --out name_genotyped_FilterStep1
+
+
+#Step 2 - filter for missing data - either to allow no missing data (--max-missing 1) or to allow 5% missing (--max-missing 0.95)
+
+vcftools --gzvcf ./name_genotyped_FilterStep1.recode.vcf.gz --max-missing XX --recode --recode-INFO-all --out name_genotyped__FilterStep2
+
+
