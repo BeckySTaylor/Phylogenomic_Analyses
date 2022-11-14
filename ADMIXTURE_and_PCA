@@ -1,0 +1,43 @@
+#ADMIXTURE and PCA
+#Make input file from VCF using Plink
+
+plink --vcf ./NAME.vcf --make-bed --out Out_name --allow-extra-chr
+
+So we can prune the data according the observed sample correlation coefficients to prune for linkage.
+#Firstly use:
+
+awk '{$2=NR;print $0}' Out_name.bim > Out_name.bim.tmp
+mv ./Out_name.bim ./Out_name_unedited.bim
+mv ./Out_name.bim.tmp ./Out_name.bim
+
+#To make sure that the bim file has different ID numbers for each SNP (in this case the line number). Using this code ensures you keep the old bim
+#Then use Plink again -this targets each SNP that has an R2 value of greater than 0.1 with any other SNP within a 50-SNP sliding window (advanced by 10 SNPs each time).
+#Will create a file with a list of unlinked SNPs
+
+plink --bfile Out_name --indep-pairwise 50 10 0.1 --allow-extra-chr
+
+#Then use below to create the pruned dataset only keeping the unlinked SNPs:
+
+plink --bfile Out_name --extract plink.prune.in --make-bed --out Out_name_pruned --allow-extra-chr
+
+#This copies the remaining (untargetted) SNPs to Out_name_pruned.bed
+#ADMIXTURE does not accept chromosome names that are not human chromosomes. We will thus just exchange the first column by 0
+
+awk '{$1=0;print $0}' Out_name_pruned.bim > Out_name_pruned.bim.tmp
+mv ./Out_name_pruned.bim ./Out_name_pruned.bim.unedited
+mv ./Out_name_pruned.bim.tmp ./Out_name_pruned.bim
+
+#Then run ADMIXTURE for K=1 to K=10
+
+for K in 1 2 3 4 5 6 7 8 9 10; \
+ do admixture --cv Out_name_pruned.bed $K -j2 | tee log${K}.out; done
+ 
+#This script will also do a cross-validation to check for the 'best' k value. It also uses 2 (-j) cores.
+
+#To look at the cross-validation errors:
+
+grep -h CV log*.out
+
+#Then run PCA in plink - using the plink prune in file and the other files as above from ADMIXTURE - however use the unedited bim file from the prune run
+
+plink --bfile Out_name_pruned.bed --out name --extract plink.prune.in --pca --allow-extra-chr
