@@ -82,3 +82,8 @@ Cat *_Scaffolds1to3_OneLine_formatted.fa > Scaffolds1to3_all.fasta
 
 ./iqtree-1.6.12-Linux/bin/iqtree -s ./Scaffolds1to3_all.fasta -nt 32 -m TVM+F+I+G4 -bb 100000
 
+#Once have run this for each portion of the genome, can make a concensus tree from the seven.
+#First, take the treefile as output for each run and concatenate them.
+#Then run that file in IQtree using:
+
+./iqtree-1.6.12-Linux/bin/iqtree -con Scaffolds1to35_trees.treefile
