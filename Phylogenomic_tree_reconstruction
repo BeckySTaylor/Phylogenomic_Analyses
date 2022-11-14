@@ -1,0 +1,84 @@
+# This file contains the code used for whole genome phylogenomic reconstruction using IQtree.
+
+#First, need to make consensus fasta for each individual. I found the most computationally feasible way to make fully aligned fasta files for all individuals was to do this from the VCF files which have been strictly filtered to remove indels (as per VCFtools filtering in 'Raw_reads_to_VCF' script)
+#This was done using the file with the Fennoscandian reindeer plus 66 caribou genomes
+
+#Also have to remove all lines that have an '*' otherwise there will be *'s in the fasta which downstream programs don't like
+#Could see lines in the VCF file with a * by using:
+
+grep '*' name.vcf > asterisk_lines.txt
+
+Filter the VCF to remove these lines using:
+
+sed '/'*'/d' name.vcf > new_name.vcf
+
+#Then have to bgzip the new VCF to use with BCFtools
+
+bcftools view name_FilterStep2_BCFtools.vcf -O z -o name_FilterStep2_BCFtools_BGZip.vcf.gz
+
+#Index the file
+
+bcftools index name_FilterStep2_BCFtools_BGZip.vcf.gz
+
+#For each indivual, use BCFtools to make a fasta file. The '-s' command significies which individual in the VCF file.
+
+bcftools consensus -f ./caribou_reference.fasta -I -s name ./name_FilterStep2_BCFtools_BGZip.vcf.gz > name.fa
+
+#Then for each fasta file for each infividual, can split by chromosome (here using a command that makes a new file every time it hits a '>')
+
+csplit -s -z ../name.fa '/>/' '{*}'
+
+#This will make a lot of files - one per scaffold - I just retained the first 36 (99% of the genome).
+#For running the Model Test, make one file per scaffold with all individuals.
+#To do this, need to concatenate each scaffold for all individuals, but need to change the first line of each file so it has the name of the individual first
+#This is the example for scaffold one, where the header line for all individuals was the scaffold name 'Scaffold_1__1_contigs__length_105830641'. 
+
+sed -i 's/Scaffold_1__1_contigs__length_105830641/name1/g' name1_Scaffold1.fa
+sed -i 's/Scaffold_1__1_contigs__length_105830641/name2/g' name2_Scaffold1.fa
+etc...
+
+#Then can concatenate each scaffold into 1 file:
+
+cat *_Scaffold1.fa > Scaffold1.fasta
+
+#Then use Model finder in IQtree to find the model of sequence evoluiton to use for that chromosome (scaffold)
+#Here using 10 threads, run for each of the scaffolds
+
+./iqtree-1.6.12-Linux/bin/iqtree -s Scaffold1.fasta -nt 10 -m MF
+
+#After finding that each chromosome pointed towards the same model of sequence evolution, I wanted to run the full genome phylogenomic tree to increase the power to resolve the intra-specific tree
+#However, this turned out to be too computationally intensive. So I split the genome into 7 'portions' of ~300 million base pairs, consisting of scaffolds 1-3, 4-7, 8-11, 12-16, 17-21, 22-27, 28-35, respectively.
+#Here is the code for doing this for scaffolds 1-3, the same was done for the other portions
+
+#First, for each individual, make a file containing scaffold 1-3:
+
+cat name1_Scaffold1.fa name1_Scaffold2.fa name1_Scaffold3.fa > name_Scaffolds1to3.fa
+
+#Need to reformat fasta file for this program as each individual sequence needs to be on one line, not multiple lines. Use:
+
+nohup awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' < name_Scaffolds1to3.fa
+
+#This will put the new formatted fasta into the nohup file. So move old one out and rename nohup:
+
+mv ./nohup.out ./name_Scaffolds1to3_OneLine.fa
+
+#Remove first line that is blank:
+
+sed '1d' -i name_Scaffolds1to3_OneLine.fa
+
+#Make all sequences into one and add first header (>) line with the name of the individual
+
+grep -v "^>" name_Scaffolds1to3_OneLine.fa | awk 'BEGIN { ORS=""; print ">name\n" } { print }' > name_Scaffolds1to3_OneLine_formatted.fa
+
+#Only thinks there is one line, use this to add end of line to the file:
+
+echo >> name_Scaffolds1to3_OneLine_formatted.fa
+
+#Once have done this for all individuals, make one file with all genomes
+
+Cat *_Scaffolds1to3_OneLine_formatted.fa > Scaffolds1to3_all.fasta
+
+#Can run this file in IQtree, here using 32 threads and the model '-m' as output from model finder and doing 100,000 bootstraps for branch support:
+
+./iqtree-1.6.12-Linux/bin/iqtree -s ./Scaffolds1to3_all.fasta -nt 32 -m TVM+F+I+G4 -bb 100000
+
