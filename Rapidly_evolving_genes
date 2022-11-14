@@ -1,0 +1,64 @@
+#Starting with the fasta files made during the phylogenomic analysis script, can extract and format all of the protein coding gene sequences from the annotation
+#Then run though GWideCodeML, a phython module to run the codeml function of PAML in a computationally efficient way.
+
+#Need one fasta file per gene (coding sequences only) containing all individuals
+#Must be named:
+
+>Individual_GeneName
+
+#With the individuals matching the names in the tree
+#Use gffread using the '-x' option which will pull out all CDS and splice together for each gene and put it into a file with the name you give. 
+#-g is the input fasta file
+#Here, doing this for scaffold 1, repeat for all
+
+gffread -x name_Scaffold1_CDS.fasta -g name_Scaffold1.fa Caribou_annotation_Scaffold1.gff
+
+#Re-format so the full gene sequence is on one line
+
+nohup awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' < name_Scaffold1_CDS.fasta
+
+#Reformated file in the nohup so rename it
+
+mv ./nohup.out ./name_Scaffold1_CDS_edit.fasta
+
+#Remove first line that is blank
+
+sed '1d' -i name_Scaffold1_CDS_edit.fasta
+
+#First line for each gene looks like:
+
+>ANN09092-RA
+
+#Which is the gene ID name from the annotation. This is useful (as it is an individual identifier for each gene), but needs to have name_GeneID. 
+#Can do find and replace using sed (all gene IDs start with >ANN) in file to add name_ onto it.
+
+sed -i 's/>ANN/>name_ANN/g' name_Scaffold1_CDS_edit.fasta
+
+#Now have one file per individual with the genes but need one file per gene. So split them all into indivdual files and concat into gene files
+
+csplit --prefix name_ -s -z ../name_Scaffold1_CDS_edit.fasta '/>/' '{*}'
+
+#Then cat all of the same ones together so you have one file per gene with all the aligned sequence for all individuals, e.g.
+
+cat *_00 > Gene1_CDS.fasta
+
+#Also need to make the tree 'unrooted' by codeml's definition. Firstly remove the outgroup and then to format for CodeML, which needs a three way split at the root, - do this in R:
+
+library(ape)
+tr <- read.tree("tree.nwk")
+unrooted_tr <- unroot(tr)
+write.tree(unrooted_tr, "tree_unrooted.nwk")
+
+#Then use GwideCodeML to run the branch model. This program will run through all gene files in the directory that make '*.fasta'.
+#The program multi-threads well and will run one gene on each available thread at a time. So here, using -p, we assign 32 threads to run 32 genes at a time
+#The 'branch_marks' file assigns which branch along the phylogeny to use as the focal group (see instructions:https://github.com/lauguma/GWideCodeML)
+#We ran 9 times, using each lineage as the focal branch
+
+gwidecodeml -tree name.nwk -work_dir ./ -cds .fasta -model BM -dnds -branch branch_marks.csv -p 32
+
+#Need to perform a Bonferroni correction for testing over the nine branches. The program does come with a script to do this but cannot get that script to work. 
+#Can pull out the lnL value of the null and the alt files for each test and calculate the Likelihood ratio using:
+
+LR = 2*(lnL1-lnL2)
+
+#For 9 branch comparisons, the new alpha needs to be 0.00555 which means the Chi-squared critical value at 1 degree of freedom is 7.69089819 (for a p value of 0.05 it is 3.84145882)
