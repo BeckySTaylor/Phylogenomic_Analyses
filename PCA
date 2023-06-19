@@ -3,7 +3,7 @@
 
 plink --vcf ./NAME.vcf --make-bed --out Out_name --allow-extra-chr
 
-So we can prune the data according the observed sample correlation coefficients to prune for linkage.
+#So we can prune the data according the observed sample correlation coefficients to prune for linkage.
 #Firstly use:
 
 awk '{$2=NR;print $0}' Out_name.bim > Out_name.bim.tmp
