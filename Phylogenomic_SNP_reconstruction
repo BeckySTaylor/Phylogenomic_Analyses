@@ -1,0 +1,31 @@
+#ngsDIST - https://github.com/fgvieira/ngsDist
+
+#Use plink to make input file
+
+plink --double-id --vcf Name.vcf.gz --recode A-transpose --out /tmp/plink --allow-extra-chr
+
+tail -n +2 /tmp/plink.traw | cut -f 1,4- | perl -p -e 's/\bNA\b/-1/g' | gzip > INPUT.geno.gz
+
+# Labels file
+zgrep CHROM Name.vcf.gz | cut -f 10- | tr "\t" "\n" > INPUT.labels
+
+#Run ngsDist to calculate genetic distances and to do the bootstraps - took around a day to run on 32 cores
+
+./ngsDist/ngsDist --n_boot_rep 1000 --boot_block_size 100 --geno INPUT.geno.gz --labels INPUT.labels --n_ind 66 --n_sites 16185367 --n_threads 32 --out ./ngsDist_Name_1000Bootstraps_labels
+
+#Then run fastme on the distance matrices - D = number of bootstraps plus the first matrix which was produced with all of the data
+
+module load fastme
+fastme -i ngsDist_Name_1000Bootstraps.dist -T 32 -s -D 1001 -o Name_1000Bootstraps.nwk
+
+#Then if we want to add boostrap support to the nodes, use RAxml. Have to first separate out the main tree from the 1000 bootstrapped ones into separate files:
+
+head -n 1 Name_1000Bootstraps.nwk > Name_Main.nwk
+
+tail -n +2 Name_1000Bootstraps.nwk > Name_Boots.nwk
+
+#Then run RAxML to add supports - does not need to be submitted:
+
+module load raxml-ng
+
+raxml-ng --support --tree Name_Main.nwk --bs-trees Name_Boots.nwk --prefix Name_1000Boot_unrooted_RAxML
