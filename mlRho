@@ -1,0 +1,11 @@
+##Using mlRho for individual heterozygosity (theta)
+
+#Run from BAM files after downloading mlRho and FormatPro (available on same website).
+#Removing bases with mapping quality and base quality each below 30, regiona with over 10X average depth of the dataset (so anything above 275)
+
+samtools view -b /path/PCID.bam |
+samtools mpileup -q 30 -Q 30 -d 275 - |
+cut -f 2,5 |
+awk -f ./bam2pro.awk |
+./FormatPro_0.5/formatPro
+../mlRho -M 0 -I
