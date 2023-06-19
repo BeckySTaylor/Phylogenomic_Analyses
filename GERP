@@ -1,0 +1,88 @@
+#GERP++
+
+#Need a tree with branch lengths between species, do this very easily using time TimeTree: http://www.timetree.org/
+#Just need to copy and paste list of species we decide to use and download the resulting tree
+
+#For each species - going to roughly follow the procedure used by VonSeth et al. 2022 and Dussex et al. 2021
+#First, download reference fatsa (https://www.ncbi.nlm.nih.gov/data-hub/genome/?taxon=40674) for the species we want to use and convert to fastq using BBmap:
+
+#e.g. for Equus caballus:
+reformat.sh -Xmx32g in=../../ncbi_dataset/data/GCF_002863925.1/GCF_002863925.1_EquCab3.0_genomic.fasta out1=Equus_caballus.fastq \
+qfake=40 fastareadlen=5000 qout=64 addcolon=t trimreaddescription=t int=t
+
+
+#The resulting fastq files can then be aligned to the caribou reference genome using bwa-mem.
+
+bwa index Dovetail_hirise_May2021_final_assembly.fasta
+
+
+#Then make the SAM file by aligning to our reference genome
+
+bwa mem -t 32 -B 3 -O 4,4 Caribou_reference.fasta Equus_caballus.fastq > Equus_caballus.sam
+
+
+#Convert to bam and remove reads aligning to more than one genomic location in Samtools as well as supplementary reads
+
+samtools view -F 2048 -bq 2 -h -o Equus_Caballus_filtered.bam Equus_Caballus.sam
+
+
+#Sort bam file
+
+samtools sort -o Equus_Caballus_filtered_sorted.bam Equus_Caballus_filtered.bam
+
+
+#Can use this to ensure no secondary or supplementary mapped reads:
+
+samtools flagstat Equus_Caballus_filtered_sorted.bam
+
+
+#Run htsbox to convert to a fasta file
+
+./htsbox pileup -f ./Caribou_reference.fasta -R -q 30 -Q 30 -l 35 -s 1 ../Equus_Caballus_filtered_sorted.bam > Equus_Caballus_filtered_sorted.fasta
+
+
+##Have to have each individual in the file - easiest to run one scaffold at a time and create an alignment fasta for each. 
+#So first, create a fasta file per scaffold 
+
+csplit -s -z ./Equus_Caballus_filtered_sorted.fasta '/>/' '{*}'
+
+#And re-name the resulting files to keep the first 36 so that we know which scaffold each one is
+
+#Then have to rename header to contain the individual name otherwise they are all the same. e.g. for scaffold 1
+
+sed -i 's/>Scaffold_1__1_contigs__length_105830641/>Equus_Caballus/g' Equus_Caballus_filtered_sorted_Scaffold1.fasta
+
+#Then made one fasta file for each scaffold, e.g:
+
+cat *_Scaffold1.fasta > Scaffold1_GERP.fasta
+
+#Need to reformat fastasta file for this program as each individual sequence needs to be on one line, not multiple lines. Use:
+
+nohup awk '/^>/ {printf("\n%s\n",$0);next; } { printf("%s",$0);}  END {printf("\n");}' < Scaffold1_GERP
+
+#This will put the new formatted fastasta into the nohup file, so move old one out and rename nohup:
+
+mv ./nohup.out ./Scaffold1_GERP_formatted.mfa
+
+#Remove first line that is blank
+
+sed '1d' -i Scaffold1_GERP_formatted.mfa
+
+##Next, run gerpcol in GERP++ - dont have caribou in the alignment, use the sister species as the reference. Do for each scaffold.
+
+####Running a modified version of the program we made available here:
+
+#The reason we made a modified version - because it can lead to biases the focal species, here caribou, should not be included in the GERP analysis. However, this leads to missing data in the alignment which makes it difficult to interpret the output files which don’t print which site the score pertains to. 
+#We therefore modified the code for the gerpcol function to print out the position for each score, as well as the allele for the specified sister species, here the white-tailed deer, which is used as the ancestral allele for each site and so is really handy to have that allele printed out.
+
+#Calculated the TS/TV ratio of the VCF file in BCFtools using BCFtools stats - came to 2.06 (-r)
+#Based on this paper (https://www.pnas.org/doi/10.1073/pnas.022629899#:~:text=Our%20results%20suggest%20that%20the,times%20by%20using%20molecular%20clocks.) average mammal mutation rate is 2.2 × 10−9 per base pair per year
+#So, as the tree branch lengths are in how many millions of years they have been separated (e.g. 4 for 4 million years), need to scale as should be in substitutions per site. 
+#Given above mutation rate, expect 0.0022 mutations per million years on average at a site.
+
+#Run modified version as such for each scaffold:
+
+./gerpcol -t ../TimeTree_species.nwk -s 0.0022 -a -f ../Scaffold1_GERP_formatted.mfa -e Odocoileus_virginianus -v -r 2.06
+
+
+
