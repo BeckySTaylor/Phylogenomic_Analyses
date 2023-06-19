@@ -1,0 +1,45 @@
+#Download the programe locally
+
+wget http://sourceforge.net/projects/snpeff/files/snpEff_latest_core.zip
+
+unzip snpEff_latest_core.zip
+
+#There should now be a 'snpEff' directory. They have a whole load of annotations you can use but we need to use our own and so we have to do a few tweaks.
+
+#Need to add a note in the configuration file to add the name of our reference
+
+nano snpEff.config 
+
+#Under where is says: '# Non-standard Databases' copy in this:
+
+#Caribou genome
+Caribou.genome : Rangifer_tarandus
+
+#Then we need to put in the reference genome and annotations (gff file) for the programe to use.
+
+mkdir data
+
+cd data
+
+mkdir genomes
+
+mkdir Caribou
+
+#In the 'Genomes' folder you must copy in the fasta file with the genome sequence, but make sure the name is 'Caribou.fa'
+
+#In the 'Caribou' folder you must copy in the predicted genes 'gff' file, and make sure it is named 'genes.gff'
+
+#The move into the 'snpEff' directory and build the database using:
+
+java -jar snpEff.jar build -v Caribou
+
+#Then we can annotate our VCF file using:
+
+java -Xmx4g -jar snpEff.jar Caribou ./Name.vcf > annotated.vcf
+
+#Outputs a new VCF file which has the annotations added to each line. See here for explanations:
+
+http://snpeff.sourceforge.net/SnpEff_manual.html#ann
+
+#There is also a html file which yu can open in a browser, and a 'genes.txt' file with a list of the annotations.
+
