@@ -1,0 +1,45 @@
+#Rscript which can take the output from our modified GERPcol and pull out all derived alleles for each individual in a VCF file.
+#Need to enter the VCF file name and path, as well as the 'rates' filename, and desired output name.
+#The version here will output all positive scores. If want all scores over a certain value then modify the lin:
+  filter(V8 > 0) %>%
+#To be any derived value, or delete this line completely and this script can be used to pull out all derived sites. 
+#I used this to pull out derived sites from the SnpEff VCF file as well as this script can be used to pull out derived alleles from a VCF file for other purposes as well.
+
+library(vcfR)
+library(tidyverse)
+library(data.table)
+library(magrittr)
+library(parallel)
+
+vcf <- read.vcfR("Name.vcf.gz")
+vcf_field_names(vcf, tag = "FORMAT")
+Z <- vcfR2tidy(vcf, format_fields = c("GT", "DP"))
+gt2 = Z$gt
+
+gt2 %<>% 
+  filter(!str_detect(gt_GT_alleles, "\\*")) %>% 
+  mutate("ref" = str_remove(gt_GT_alleles, "(/|\\|).$"),
+         "tar" = str_remove(gt_GT_alleles, "^.(/|\\|)")) %>% 
+  filter(ref != tar)
+
+sca = fread("Scaffold1.rates.gz", header = F, nThread = 16) %>% 
+  mutate(V2 = V2 + 1) %>%
+  filter(V8 > 0) %>% 
+  select(-c(V1, V3, V5))
+
+sams = gt2$Indiv %>% unique();
+#change mc.cores to number of threads you want to use
+out = parallel::mclapply(seq_len(length(sams)),
+                   FUN = function(i){
+                     system(sprintf('echo "processing %s\n"', sams[i]));
+                     gt2 %>% 
+                       filter(Indiv == sams[i]) %>% 
+                       select(POS, tar) -> tmp;
+                     sca %>%
+                       filter(V2 %in% tmp$POS) -> tmp2;
+                     left_join(tmp2, tmp, by = c("V2" = "POS")) %>% 
+                       mutate("sam" = sams[i]) -> out;
+                     names(out) = c("pos", "org", "ref", "v1", "v2", "geno", "sample");
+                     fwrite(out, paste0(i, "_out.txt"));#write to drive
+                     return(out);
+                   }, mc.preschedule = F, mc.cores = 1)#change mc.cores to number of threads, if you use windows, put mc.cores = 1;
