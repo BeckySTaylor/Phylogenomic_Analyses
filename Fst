@@ -1,0 +1,4 @@
+##Use VCF tools to calculate Fst between lineages. Here is an example of the run between the BRG and ARC lineages:
+
+vcftools --gzvcf ./Name.vcf.gz --weir-fst-pop ARC.txt --weir-fst-pop BRG.txt \
+--fst-window-size 50000 --fst-window-step 25000 --keep ARC_BRG.txt --out ARC_BRG_50000
