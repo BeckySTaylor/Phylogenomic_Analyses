@@ -80,9 +80,9 @@ sed '1d' -i Scaffold1_GERP_formatted.mfa
 #So, as the tree branch lengths are in how many millions of years they have been separated (e.g. 4 for 4 million years), need to scale as should be in substitutions per site. 
 #Given above mutation rate, expect 0.0022 mutations per million years on average at a site.
 
-#Run modified version as such for each scaffold:
+#Run modified version as such for each scaffold, the first species listed after '-e- will be the specified sister species, it will print the alleles at all positions for the other two as well but this is purely for the next step using the R script to extract derived alleles where we want to compare against three outgroup species:
 
-./gerpcol -t ../TimeTree_species.nwk -s 0.0022 -a -f ../Scaffold1_GERP_formatted.mfa -e Odocoileus_virginianus -v -r 2.06
+./gerp/gerpcol -t TimeTree_species_website.nwk -s 0.0022 -f Scaffold1_GERP_formatted.mfa -a -e Odocoileus_virginianus-Alces_alces-Cervus_elaphus -v -r 2.06
 
 
 
