@@ -1,0 +1,31 @@
+#Make input file from VCF using Plink
+
+plink --vcf ./NAME.vcf --make-bed --out Out_name --allow-extra-chr
+
+#Prune the data according the observed sample correlation coefficients to account for LD.
+#Firstly have to make sure that the bim file has different ID numbers for each SNP (in this case the line number), do this in a way that we keep the old bim file:
+
+awk '{$2=NR;print $0}' Out_name.bim > Out_name.bim.tmp
+mv ./Out_name.bim ./Out_name_unedited.bim
+mv ./Out_name.bim.tmp ./Out_name.bim
+
+#Then use Plink again -this targets each SNP that has an R2 value of greater than 0.1 with any other SNP within a 50-SNP sliding window (advanced by 10 SNPs each time).
+#Will create a file with a list of unlinked SNPs
+
+plink --bfile Out_name --indep-pairwise 50 10 0.1 --allow-extra-chr
+
+#Then use below to create the pruned dataset only keeping the unlinked SNPs:
+
+plink --bfile Out_name --extract plink.prune.in --make-bed --out Out_name_pruned --allow-extra-chr
+
+#This copies the remaining (untargetted) SNPs to Out_name_pruned.bed
+# ADMIXTURE does not accept chromosome names that are not human chromosomes. We will thus just exchange the first column by 0
+
+awk '{$1=0;print $0}' Out_name_pruned.bim > Out_name_pruned.bim.tmp
+mv ./Out_name_pruned.bim ./Out_name_pruned.bim.unedited
+mv ./Out_name_pruned.bim.tmp ./Out_name_pruned.bim
+
+#Then run ADMIXTURE
+
+for K in 1 2 3 4 5 6 7 8 9 10; \
+ do admixture --cv Out_name_pruned.bed $K -j2 | tee log${K}.out; done
