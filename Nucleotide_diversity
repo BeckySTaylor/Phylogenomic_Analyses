@@ -1,0 +1,6 @@
+#Have to create an AllSites VCF (not just variant sites) - adding filter for quality and depth
+
+bcftools mpileup -f /path/Dovetail_hirise_May2021_final_assembly.fasta -b bamlist.txt -q 30 -Q 30 -d 55 | bcftools call -m -Oz -f GQ -o out_AllSites.vcf.gz
+
+#Then run pixy
+pixy --stats pi fst dxy --vcf ./out_AllSites.vcf.gz --populations ./Pops.txt --window_size 50000 --n_cores 18
