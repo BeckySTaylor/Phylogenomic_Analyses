@@ -1,0 +1,13 @@
+##Firts have to make input files for PSMC for each individual.
+
+#Convert bam to fastq format applying filters for alignment quality, base pair quality, and depth:
+
+samtools mpileup -C50 -q 30 -Q 30 -uf /path/Reference_genome/Dovetail_hirise_May2021_final_assembly.fasta ./PCID.bam | bcftools call -c | vcfutils.pl vcf2fq -d 10 -D 54 > PCID.fq
+
+#Convert to PSMC input file:
+
+/path/psmc/utils/fq2psmcfa PCID.fq > PCID.psmcfa
+
+#Run PSMC using setting optimised in Taylor et al. (2021) Population dynamics of caribou shaped by glacial cycles before the Last Glacial Maximum. Molecular Ecology, 30: 6121-6143. DOI: 10.1111/mec.16166:
+
+/path/psmc -t 5 -p "4+25*2+4+6" -o PCID.psmc PCID.psmcfa
