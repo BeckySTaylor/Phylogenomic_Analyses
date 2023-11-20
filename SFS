@@ -1,0 +1,12 @@
+##SFS calculation
+
+#Using easySFS, run separately on a VCF file for each lineage and for each category of load:
+
+#First run the preview, example for the loss of function alleles in the ARC lineage:
+
+./easySFS/easySFS.py -i ./ARC_LOF.recode.vcf -p ./Pop_ARC.txt -a --preview
+
+#Then choose the number to include in the projection, whichever has the highest value (here we have no missing data so should be the highest one). 
+#For ARC this is 16 as there are 8 diploid individuals
+
+./easySFS/easySFS.py -i ./ARC_LOF.recode.vcf -p ./Pop_ARC.txt -a --proj 16
